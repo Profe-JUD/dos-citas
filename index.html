@@ -348,6 +348,7 @@
     overflow: hidden;
     pointer-events: none;
   }
+  .onda,
   .espejo .err {
     text-decoration: underline wavy #d0021b;
     text-decoration-thickness: 1.5px;
@@ -435,7 +436,16 @@
     font-size: 0.9rem;
     font-style: italic;
     opacity: 0.8;
-    min-height: 2.6em;
+    min-height: 2.9em;
+    white-space: pre-line;
+  }
+  #pantalla-inicio p.lineas { white-space: pre-line; max-width: 600px; }
+  @media (max-width: 440px) {
+    .opciones-corrector { flex-direction: column; }
+    .op-corr { border-left: none; border-top: 1.5px solid var(--borde); padding: 10px 8px; }
+    .op-corr:first-child { border-top: none; }
+    #explicacion-corrector { font-size: 0.84rem; }
+    #pantalla-inicio p.lineas { font-size: 0.9rem; }
   }
   .opciones {
     display: flex;
@@ -545,9 +555,9 @@
 
 <section id="pantalla-inicio">
   <h1>Dos citas</h1>
-  <p>Aquí tienes los fragmentos de dos citas mezclados.<br>
-     Toca un fragmento para escucharlo y arrástralo a uno de los dos bloques
-     para formar las dos citas.</p>
+  <p class="lineas">Aquí tienes los fragmentos mezclados de dos citas.
+Toca un fragmento para escucharlo.
+Muévelo a un bloque para formar las citas.</p>
   <div id="eleccion-corrector" hidden>
     <div class="rotulo-eleccion">Corrector ortográfico</div>
     <div class="opciones-corrector" role="group" aria-label="Corrector ortográfico">
@@ -566,7 +576,7 @@
 
 <header id="cabecera" hidden>
   <h1>Forma las dos citas</h1>
-  <p>Toca un fragmento para escucharlo · arrástralo a un bloque</p>
+  <p>Toca un fragmento para escucharlo · muévelo a un bloque</p>
 </header>
 
 <main id="pantalla-ordenar" hidden>
@@ -576,11 +586,11 @@
   <div id="bloques">
     <div class="zona bloque" id="bloque-1">
       <div class="rotulo">Cita 1</div>
-      <div class="vacio">Arrastra aquí los fragmentos</div>
+      <div class="vacio">Mueve aquí los fragmentos</div>
     </div>
     <div class="zona bloque" id="bloque-2">
       <div class="rotulo">Cita 2</div>
-      <div class="vacio">Arrastra aquí los fragmentos</div>
+      <div class="vacio">Mueve aquí los fragmentos</div>
     </div>
   </div>
   <button id="btn-listo" type="button" hidden>He terminado ✓</button>
@@ -1988,10 +1998,21 @@ const VOZ = !apagado("ayudas") && (encendido("dictado") || encendido("voz"));
 const vozActiva = () => VOZ && modoCorrector !== "no";
 
 const EXPLICACION_CORRECTOR = {
-  sugerir: "Las palabras mal escritas se subrayan en rojo. Tócalas y elige la forma correcta.",
-  marcar: "Las palabras mal escritas se subrayan en rojo, pero sin solución: ¡encuentra el error y corrígelo tú!",
-  no: "Nadie te avisa de los errores: revisa tú tu texto con atención."
+  sugerir: "Las palabras mal escritas se subrayan en rojo.\nTócalas y elige la forma correcta.",
+  marcar: "Las palabras mal escritas se subrayan en rojo.\n¡Encuentra el error y corrígelo tú!",
+  no: "Nadie te avisa de los errores.\nRevisa tú tu texto con atención."
 };
+
+/* Escribe un texto y muestra «en rojo» con la misma onda roja que el corrector */
+function escribirConOnda(elemento, texto) {
+  elemento.textContent = "";
+  const pos = texto.indexOf("en rojo");
+  if (pos < 0) { elemento.textContent = texto; return; }
+  const onda = document.createElement("span");
+  onda.className = "onda";
+  onda.textContent = "en rojo";
+  elemento.append(texto.slice(0, pos), onda, texto.slice(pos + "en rojo".length));
+}
 
 function mostrarModoFijo() {
   const partes = [];
@@ -2016,7 +2037,7 @@ function prepararEleccionCorrector() {
       b.classList.toggle("elegida", activo);
       b.setAttribute("aria-pressed", activo ? "true" : "false");
     });
-    explicacion.textContent = EXPLICACION_CORRECTOR[modoCorrector];
+    escribirConOnda(explicacion, EXPLICACION_CORRECTOR[modoCorrector]);
   };
   botones.forEach(b => b.addEventListener("click", () => { modoCorrector = b.dataset.modo; marcar(); }));
   marcar();
@@ -2564,7 +2585,7 @@ function preguntarEnBanda(pregunta, audio, construir, aviso) {
   for (const texto of textoAyudas()) {
     const nota = document.createElement("p");
     nota.className = "ayuda";
-    nota.textContent = texto;
+    escribirConOnda(nota, texto);
     bandaContenido.appendChild(nota);
   }
   btnContinuar.disabled = true;
