@@ -295,6 +295,12 @@
     font-weight: 600;
     margin-bottom: 12px;
   }
+  #banda-pregunta .indicacion {
+    display: block;
+    margin-top: 3px;
+    font-size: 0.85em;
+    font-weight: 400;
+  }
   .campo-cita { margin-bottom: 12px; }
   .campo-cita label {
     display: block;
@@ -819,7 +825,7 @@ const ORIGINALES = [
     corto: "Lo único que me duele de morir…",
     fuente: "Gabriel García Márquez («Gabo»), El amor en los tiempos del cólera" }
 ];
-const PREGUNTA_SIGNIFICA = "¿Qué nos quiere decir cada cita? Explícalo con tus propias palabras.";
+const PREGUNTA_SIGNIFICA = "¿Qué nos quiere decir cada cita?\nExplícalo con tus propias palabras.";
 const PREGUNTA_IDENTIFICAS = "¿Con qué cita te identificas más? ¿Por qué?";
 const NINGUNA = "Ninguna de las dos";
 
@@ -836,7 +842,15 @@ const btnContinuar = document.getElementById("btn-continuar");
 
 /* Muestra una pregunta en la banda; resuelve cuando se pulsa "Continuar". */
 function preguntarEnBanda(pregunta, audio, construir, aviso) {
-  document.getElementById("banda-pregunta").textContent = pregunta;
+  const [titulo, ...indicacion] = pregunta.split("\n");
+  const p = document.getElementById("banda-pregunta");
+  p.textContent = titulo;
+  if (indicacion.length) {
+    const s = document.createElement("span");
+    s.className = "indicacion";
+    s.textContent = indicacion.join(" ");
+    p.append(s);
+  }
   bandaContenido.innerHTML = "";
   bandaAviso.textContent = aviso;
   const listo = construir(bandaContenido, ok => { btnContinuar.disabled = !ok; });
@@ -981,7 +995,7 @@ function textoRespuestas() {
   if (respuestas.sobrantes.length) l.push("Sin colocar: " + respuestas.sobrantes.join(" / "));
   l.push("", "LAS CITAS ORIGINALES");
   ORIGINALES.forEach((o, i) => l.push((i + 1) + ") «" + o.texto + "» — " + o.fuente));
-  l.push("", PREGUNTA_SIGNIFICA.toUpperCase());
+  l.push("", PREGUNTA_SIGNIFICA.replace("\n", " ").toUpperCase());
   ORIGINALES.forEach((o, i) => l.push((i + 1) + ") «" + o.corto + "»", "   " + (respuestas.significa[i] || "")));
   l.push("", "¿CON QUÉ CITA TE IDENTIFICAS MÁS?", respuestas.eleccion, "", "¿POR QUÉ?", respuestas.porque, "");
   return l.join("\r\n");
