@@ -571,16 +571,16 @@ const INACTIVIDAD_MS = 2 * 60 * 1000;
 
 /* Ayudas, configurables por la dirección:
    corrector activado salvo ?ayudas=no o ?corrector=no;
-   micrófono desactivado salvo ?voz=si (necesita permiso del navegador) */
+   micrófono desactivado salvo ?dictado=si (o ?voz=si; necesita permiso del navegador) */
 const PARAMETROS = new URLSearchParams(location.search);
 const valor = nombre => (PARAMETROS.get(nombre) || "").toLowerCase();
 const apagado = nombre => ["no", "0", "false", "off"].includes(valor(nombre));
 const encendido = nombre => ["si", "sí", "1", "true", "on"].includes(valor(nombre));
 const CORRECTOR = !apagado("ayudas") && !apagado("corrector");
-const VOZ = !apagado("ayudas") && encendido("voz");
+const VOZ = !apagado("ayudas") && (encendido("dictado") || encendido("voz"));
 if (!CORRECTOR || VOZ) {
   const modo = document.getElementById("modo");
-  modo.textContent = !CORRECTOR ? "Versión sin ayudas (sin corrector)" : "Versión con micrófono";
+  modo.textContent = !CORRECTOR ? "Versión sin ayudas (sin corrector)" : "Versión con dictado por voz 🎤";
   modo.hidden = false;
 }
 
