@@ -401,6 +401,42 @@
   .estado-voz:empty { display: none; }
   #banda .ayuda { font-size: 0.8rem; opacity: 0.7; margin: 4px 0 8px; line-height: 1.4; }
   #modo { font-size: 0.9rem; opacity: 0.7; font-style: italic; }
+  #eleccion-corrector { max-width: 560px; width: 100%; }
+  .rotulo-eleccion {
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--acento);
+    margin-bottom: 8px;
+  }
+  .opciones-corrector {
+    display: flex;
+    border: 2px solid var(--borde);
+    border-radius: 12px;
+    overflow: hidden;
+    background: var(--carta);
+    box-shadow: var(--sombra);
+  }
+  .op-corr {
+    flex: 1;
+    padding: 11px 8px;
+    border: none;
+    border-left: 1.5px solid var(--borde);
+    background: transparent;
+    color: var(--tinta);
+    font-family: inherit;
+    font-size: 0.98rem;
+    cursor: pointer;
+  }
+  .op-corr:first-child { border-left: none; }
+  .op-corr.elegida { background: var(--acento); color: #fff; font-weight: 600; }
+  #explicacion-corrector {
+    margin-top: 8px;
+    font-size: 0.9rem;
+    font-style: italic;
+    opacity: 0.8;
+    min-height: 2.6em;
+  }
   .opciones {
     display: flex;
     flex-wrap: wrap;
@@ -512,6 +548,15 @@
   <p>Aquí tienes los fragmentos de dos citas mezclados.<br>
      Toca un fragmento para escucharlo y arrástralo a uno de los dos bloques
      para formar las dos citas.</p>
+  <div id="eleccion-corrector" hidden>
+    <div class="rotulo-eleccion">Corrector ortográfico</div>
+    <div class="opciones-corrector" role="group" aria-label="Corrector ortográfico">
+      <button class="op-corr" type="button" data-modo="sugerir">con sugerencias</button>
+      <button class="op-corr" type="button" data-modo="marcar">sin sugerencias</button>
+      <button class="op-corr" type="button" data-modo="no">sin ayudas</button>
+    </div>
+    <p id="explicacion-corrector"></p>
+  </div>
   <div class="niveles">
     <button class="btn-nivel" type="button" data-nivel="1">Nivel 1<small>4 fragmentos</small></button>
     <button class="btn-nivel" type="button" data-nivel="2">Nivel 2<small>6 fragmentos</small></button>
@@ -1933,20 +1978,53 @@ const PARAMETROS = new URLSearchParams(location.search);
 const valor = nombre => (PARAMETROS.get(nombre) || "").toLowerCase();
 const apagado = nombre => ["no", "0", "false", "off"].includes(valor(nombre));
 const encendido = nombre => ["si", "sí", "1", "true", "on"].includes(valor(nombre));
-const CORRECTOR = !apagado("ayudas") && !apagado("corrector");
-const MODO_CORRECTOR = !CORRECTOR ? "no" : valor("corrector") === "marcar" ? "marcar" : "sugerir";
+/* Sin parámetro, la pantalla de inicio deja elegir el corrector; con parámetro, queda fijo */
+const MODO_FIJO = apagado("ayudas") || apagado("corrector") ? "no"
+  : valor("corrector") === "marcar" ? "marcar"
+  : ["sugerir", "sugerencias", "si", "sí", "on"].includes(valor("corrector")) ? "sugerir"
+  : null;
+let modoCorrector = MODO_FIJO || "sugerir";
 const VOZ = !apagado("ayudas") && (encendido("dictado") || encendido("voz"));
-{
+const vozActiva = () => VOZ && modoCorrector !== "no";
+
+const EXPLICACION_CORRECTOR = {
+  sugerir: "Las palabras mal escritas se subrayan en rojo. Tócalas y elige la forma correcta.",
+  marcar: "Las palabras mal escritas se subrayan en rojo, pero sin solución: ¡encuentra el error y corrígelo tú!",
+  no: "Nadie te avisa de los errores: revisa tú tu texto con atención."
+};
+
+function mostrarModoFijo() {
   const partes = [];
-  if (MODO_CORRECTOR === "no") partes.push("sin ayudas (sin corrector)");
-  if (MODO_CORRECTOR === "marcar") partes.push("el corrector solo marca los errores");
-  if (VOZ) partes.push("con dictado por voz 🎤");
+  if (MODO_FIJO === "no") partes.push("sin ayudas (sin corrector)");
+  if (MODO_FIJO === "marcar") partes.push("el corrector solo marca los errores");
+  if (MODO_FIJO === "sugerir") partes.push("corrector con sugerencias");
+  if (VOZ && MODO_FIJO !== "no") partes.push("con dictado por voz 🎤");
   if (partes.length) {
     const modo = document.getElementById("modo");
     modo.textContent = "Versión: " + partes.join(" · ");
     modo.hidden = false;
   }
 }
+
+function prepararEleccionCorrector() {
+  const caja = document.getElementById("eleccion-corrector");
+  const explicacion = document.getElementById("explicacion-corrector");
+  const botones = [...caja.querySelectorAll(".op-corr")];
+  const marcar = () => {
+    botones.forEach(b => {
+      const activo = b.dataset.modo === modoCorrector;
+      b.classList.toggle("elegida", activo);
+      b.setAttribute("aria-pressed", activo ? "true" : "false");
+    });
+    explicacion.textContent = EXPLICACION_CORRECTOR[modoCorrector];
+  };
+  botones.forEach(b => b.addEventListener("click", () => { modoCorrector = b.dataset.modo; marcar(); }));
+  marcar();
+  caja.hidden = false;
+}
+
+if (MODO_FIJO) mostrarModoFijo();
+else prepararEleccionCorrector();
 
 /* ---------- Corrector ortográfico propio (nspell + diccionario es_ES, sin internet) ---------- */
 const PALABRAS_EXTRA = ["Gabo", "Gabriel", "García", "Márquez"];
@@ -1957,7 +2035,7 @@ const corrector = (() => {
   let trabajador = null;
   let local = null;
   let listo = false;
-  let fallo = MODO_CORRECTOR === "no" || !window.NSPELL_CODIGO || !window.DICCIONARIO_ES;
+  let fallo = MODO_FIJO === "no" || !window.NSPELL_CODIGO || !window.DICCIONARIO_ES;
   let siguienteId = 0;
   const esperando = new Map();
   const alListo = [];
@@ -2120,7 +2198,7 @@ function conectarCorrector(t, caja) {
   t.addEventListener("scroll", () => { espejo.scrollTop = t.scrollTop; });
   corrector.cuandoListo(revisar);
 
-  if (MODO_CORRECTOR !== "sugerir") return;
+  if (modoCorrector !== "sugerir") return;
   t.addEventListener("click", async () => {
     cerrarSugerencias();
     const pos = t.selectionStart;
@@ -2513,9 +2591,9 @@ function campoTexto(placeholder, id) {
   t.maxLength = 1000;
   t.rows = 2;
   t.lang = "es";
-  const propio = corrector.activo;
-  t.spellcheck = CORRECTOR && !propio;
-  t.setAttribute("autocorrect", MODO_CORRECTOR === "sugerir" ? "on" : "off");
+  const propio = modoCorrector !== "no" && corrector.activo;
+  t.spellcheck = modoCorrector !== "no" && !propio;
+  t.setAttribute("autocorrect", modoCorrector === "sugerir" ? "on" : "off");
   t.setAttribute("autocomplete", "off");
   t.setAttribute("autocapitalize", "sentences");
   const caja = document.createElement("div");
@@ -2565,7 +2643,7 @@ function detenerDictado() {
 
 function botonMicrofono(t, estado) {
   const Reconocimiento = reconocimientoDisponible();
-  if (!VOZ || !Reconocimiento) return null;
+  if (!vozActiva() || !Reconocimiento) return null;
   const boton = document.createElement("button");
   boton.type = "button";
   boton.className = "microfono";
@@ -2613,10 +2691,10 @@ function botonMicrofono(t, estado) {
 
 function textoAyudas() {
   const partes = [];
-  if (MODO_CORRECTOR === "sugerir" && corrector.activo) partes.push("Las palabras mal escritas se subrayan en rojo: tócalas o haz clic sobre ellas para ver sugerencias.");
-  else if (MODO_CORRECTOR === "marcar" && corrector.activo) partes.push("Las palabras mal escritas se subrayan en rojo. ¡Encuentra el error y corrígelo tú!");
-  else if (CORRECTOR) partes.push("Las palabras mal escritas se subrayan en rojo: haz clic derecho sobre ellas (o tócalas) para ver sugerencias. Si no ves nada, activa el español en tu teclado o navegador.");
-  if (VOZ && reconocimientoDisponible()) partes.push("🎤 Pulsa el micrófono y habla en español. El dictado necesita internet, el permiso del navegador y lo procesa Google o Apple.");
+  if (modoCorrector === "sugerir" && corrector.activo) partes.push("Las palabras mal escritas se subrayan en rojo: tócalas o haz clic sobre ellas para ver sugerencias.");
+  else if (modoCorrector === "marcar" && corrector.activo) partes.push("Las palabras mal escritas se subrayan en rojo. ¡Encuentra el error y corrígelo tú!");
+  else if (modoCorrector !== "no") partes.push("Las palabras mal escritas se subrayan en rojo: haz clic derecho sobre ellas (o tócalas) para ver sugerencias. Si no ves nada, activa el español en tu teclado o navegador.");
+  if (vozActiva() && reconocimientoDisponible()) partes.push("🎤 Pulsa el micrófono y habla en español. El dictado necesita internet, el permiso del navegador y lo procesa Google o Apple.");
   return partes;
 }
 
@@ -2731,8 +2809,8 @@ function textoRespuestas() {
     ahora.getFullYear() + ", " + dosCifras(ahora.getHours()) + ":" + dosCifras(ahora.getMinutes());
   const l = [];
   l.push("DOS CITAS – Mis respuestas", "Fecha: " + fecha, "Nivel: " + nivel,
-    "Ayudas: corrector " + ({ sugerir: "con sugerencias", marcar: "solo marca los errores", no: "no" })[MODO_CORRECTOR] +
-    ", micrófono " + (VOZ ? "sí" : "no"), "");
+    "Ayudas: corrector " + ({ sugerir: "con sugerencias", marcar: "solo marca los errores", no: "no" })[modoCorrector] +
+    ", micrófono " + (vozActiva() ? "sí" : "no"), "");
   l.push("MI VERSIÓN");
   respuestas.version.forEach((t, i) => l.push("Cita " + (i + 1) + ": " + (t || "—")));
   if (respuestas.sobrantes.length) l.push("Sin colocar: " + respuestas.sobrantes.join(" / "));
