@@ -320,6 +320,31 @@
     resize: vertical;
   }
   textarea.respuesta:focus { outline: none; border-color: var(--acento); }
+  .campo-texto { position: relative; }
+  .campo-texto.con-microfono textarea.respuesta { padding-right: 54px; }
+  .microfono {
+    position: absolute;
+    right: 8px;
+    bottom: 10px;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: 1.5px solid var(--borde);
+    background: var(--carta);
+    font-size: 1.1rem;
+    cursor: pointer;
+    box-shadow: var(--sombra);
+  }
+  .microfono.escuchando {
+    background: var(--acento);
+    border-color: var(--acento);
+    animation: latido 1.2s ease-in-out infinite;
+  }
+  @keyframes latido { 50% { transform: scale(1.12); } }
+  .estado-voz { font-size: 0.82rem; color: var(--acento); margin-top: 3px; }
+  .estado-voz:empty { display: none; }
+  #banda .ayuda { font-size: 0.8rem; opacity: 0.7; margin: 4px 0 8px; line-height: 1.4; }
+  #modo { font-size: 0.9rem; opacity: 0.7; font-style: italic; }
   .opciones {
     display: flex;
     flex-wrap: wrap;
@@ -435,6 +460,7 @@
     <button class="btn-nivel" type="button" data-nivel="1">Nivel 1<small>4 fragmentos</small></button>
     <button class="btn-nivel" type="button" data-nivel="2">Nivel 2<small>6 fragmentos</small></button>
   </div>
+  <p id="modo" hidden></p>
 </section>
 
 <header id="cabecera" hidden>
@@ -542,6 +568,18 @@ const NIVELES = {
   ]
 };
 const INACTIVIDAD_MS = 2 * 60 * 1000;
+
+/* Ayudas, configurables por la dirección: ?ayudas=no, ?corrector=no, ?voz=no */
+const PARAMETROS = new URLSearchParams(location.search);
+const apagado = nombre => ["no", "0", "false", "off"].includes((PARAMETROS.get(nombre) || "").toLowerCase());
+const CORRECTOR = !apagado("ayudas") && !apagado("corrector");
+const VOZ = !apagado("ayudas") && !apagado("voz");
+if (!CORRECTOR || !VOZ) {
+  const modo = document.getElementById("modo");
+  modo.textContent = !CORRECTOR && !VOZ ? "Versión sin ayudas (sin corrector ni micrófono)"
+    : !CORRECTOR ? "Versión sin corrector" : "Versión sin micrófono";
+  modo.hidden = false;
+}
 
 /* ---------- Estado ---------- */
 let nivel = null;
@@ -854,12 +892,19 @@ function preguntarEnBanda(pregunta, audio, construir, aviso) {
   bandaContenido.innerHTML = "";
   bandaAviso.textContent = aviso;
   const listo = construir(bandaContenido, ok => { btnContinuar.disabled = !ok; });
+  for (const texto of textoAyudas()) {
+    const nota = document.createElement("p");
+    nota.className = "ayuda";
+    nota.textContent = texto;
+    bandaContenido.appendChild(nota);
+  }
   btnContinuar.disabled = true;
   banda.hidden = false;
   banda.scrollIntoView({ block: "start", behavior: "smooth" });
   reproducir(audio);
   return new Promise(resolve => {
     btnContinuar.onclick = () => {
+      detenerDictado();
       btnContinuar.onclick = null;
       banda.hidden = true;
       resolve(listo());
@@ -867,12 +912,109 @@ function preguntarEnBanda(pregunta, audio, construir, aviso) {
   });
 }
 
-function areaTexto(placeholder) {
+/* Campo de texto en español: corrector del navegador/teclado y, si se puede, micrófono */
+function campoTexto(placeholder, id) {
   const t = document.createElement("textarea");
   t.className = "respuesta";
+  t.id = id;
   t.placeholder = placeholder;
   t.maxLength = 1000;
-  return t;
+  t.lang = "es";
+  t.spellcheck = CORRECTOR;
+  t.setAttribute("autocorrect", CORRECTOR ? "on" : "off");
+  t.setAttribute("autocapitalize", "sentences");
+  const caja = document.createElement("div");
+  caja.className = "campo-texto";
+  caja.appendChild(t);
+  const estado = document.createElement("div");
+  estado.className = "estado-voz";
+  const mic = botonMicrofono(t, estado);
+  if (mic) {
+    caja.classList.add("con-microfono");
+    caja.append(mic);
+  }
+  const envoltura = document.createElement("div");
+  envoltura.append(caja, estado);
+  return { envoltura, t };
+}
+
+/* ---------- Dictado por voz (Web Speech API) ---------- */
+const MENSAJES_VOZ = {
+  "not-allowed": "El navegador no permite usar el micrófono. Revisa los permisos.",
+  "service-not-allowed": "El navegador no permite usar el micrófono. Revisa los permisos.",
+  "network": "Sin conexión a internet. Usa el micrófono de tu teclado.",
+  "no-speech": "No se ha oído nada. Inténtalo otra vez.",
+  "audio-capture": "No se ha encontrado ningún micrófono."
+};
+let dictadoActivo = null;
+
+function reconocimientoDisponible() {
+  return window.SpeechRecognition || window.webkitSpeechRecognition || null;
+}
+
+function detenerDictado() {
+  if (dictadoActivo) {
+    const d = dictadoActivo;
+    dictadoActivo = null;
+    try { d.rec.stop(); } catch (e) { /* ya parado */ }
+    d.boton.classList.remove("escuchando");
+  }
+}
+
+function botonMicrofono(t, estado) {
+  const Reconocimiento = reconocimientoDisponible();
+  if (!VOZ || !Reconocimiento) return null;
+  const boton = document.createElement("button");
+  boton.type = "button";
+  boton.className = "microfono";
+  boton.textContent = "🎤";
+  boton.title = "Dictar en español";
+  boton.setAttribute("aria-label", "Dictar en español");
+  boton.addEventListener("click", () => {
+    if (boton.classList.contains("escuchando")) { detenerDictado(); return; }
+    detenerDictado();
+    reproductor.pause();
+    const rec = new Reconocimiento();
+    rec.lang = "es-ES";
+    rec.interimResults = true;
+    rec.continuous = true;
+    const base = t.value.trim() ? t.value.replace(/\s*$/, " ") : "";
+    let definitivo = "";
+    rec.onresult = ev => {
+      let provisional = "";
+      for (let i = ev.resultIndex; i < ev.results.length; i++) {
+        const r = ev.results[i];
+        if (r.isFinal) definitivo += r[0].transcript;
+        else provisional += r[0].transcript;
+      }
+      t.value = base + (definitivo + provisional).replace(/^\s+/, "");
+      t.dispatchEvent(new Event("input"));
+    };
+    rec.onerror = ev => { estado.textContent = MENSAJES_VOZ[ev.error] || "No se ha podido usar el micrófono."; };
+    rec.onend = () => {
+      boton.classList.remove("escuchando");
+      if (dictadoActivo && dictadoActivo.rec === rec) dictadoActivo = null;
+      if (estado.textContent.startsWith("Escuchando")) estado.textContent = "";
+    };
+    estado.textContent = "Escuchando… habla en español. Pulsa 🎤 otra vez para terminar.";
+    boton.classList.add("escuchando");
+    dictadoActivo = { rec, boton };
+    try {
+      rec.start();
+    } catch (e) {
+      detenerDictado();
+      estado.textContent = "No se ha podido usar el micrófono.";
+    }
+  });
+  return boton;
+}
+
+function textoAyudas() {
+  const partes = [];
+  if (CORRECTOR) partes.push("Las palabras mal escritas se subrayan en rojo: haz clic derecho sobre ellas (o tócalas) para ver sugerencias. Si no ves nada, activa el español en tu teclado o navegador.");
+  if (VOZ && reconocimientoDisponible()) partes.push("🎤 Pulsa el micrófono y habla en español. El dictado necesita internet y lo procesa Google o Apple.");
+  else if (VOZ) partes.push("🎤 También puedes dictar con el micrófono de tu teclado.");
+  return partes;
 }
 
 function pasoSignifica() {
@@ -883,9 +1025,8 @@ function pasoSignifica() {
       const label = document.createElement("label");
       label.textContent = "«" + o.texto + "»";
       label.htmlFor = "significa-" + i;
-      const t = areaTexto("Escribe aquí tu interpretación…");
-      t.id = "significa-" + i;
-      bloque.append(label, t);
+      const { envoltura, t } = campoTexto("Escribe aquí tu interpretación…", "significa-" + i);
+      bloque.append(label, envoltura);
       cont.appendChild(bloque);
       return t;
     });
@@ -916,10 +1057,9 @@ function pasoIdentificas() {
     });
     const bloque = document.createElement("div");
     bloque.className = "campo-cita";
-    const t = areaTexto("Escribe aquí por qué…");
-    t.id = "porque";
+    const { envoltura, t } = campoTexto("Escribe aquí por qué…", "porque");
     t.setAttribute("aria-label", "¿Por qué?");
-    bloque.append(t);
+    bloque.append(envoltura);
     cont.append(fila, bloque);
     const revisar = () => habilitar(Boolean(elegida) && Boolean(t.value.trim()));
     t.addEventListener("input", revisar);
@@ -987,7 +1127,8 @@ function textoRespuestas() {
   const fecha = dosCifras(ahora.getDate()) + "/" + dosCifras(ahora.getMonth() + 1) + "/" +
     ahora.getFullYear() + ", " + dosCifras(ahora.getHours()) + ":" + dosCifras(ahora.getMinutes());
   const l = [];
-  l.push("DOS CITAS – Mis respuestas", "Fecha: " + fecha, "Nivel: " + nivel, "");
+  l.push("DOS CITAS – Mis respuestas", "Fecha: " + fecha, "Nivel: " + nivel,
+    "Ayudas: corrector " + (CORRECTOR ? "sí" : "no") + ", micrófono " + (VOZ ? "sí" : "no"), "");
   l.push("MI VERSIÓN");
   respuestas.version.forEach((t, i) => l.push("Cita " + (i + 1) + ": " + (t || "—")));
   if (respuestas.sobrantes.length) l.push("Sin colocar: " + respuestas.sobrantes.join(" / "));
