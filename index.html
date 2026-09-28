@@ -826,7 +826,7 @@ const ORIGINALES = [
     fuente: "Gabriel García Márquez («Gabo»), El amor en los tiempos del cólera" }
 ];
 const PREGUNTA_SIGNIFICA = "¿Qué nos quiere decir cada cita?\nExplícalo con tus propias palabras.";
-const PREGUNTA_IDENTIFICAS = "¿Con qué cita te identificas más? ¿Por qué?";
+const PREGUNTA_IDENTIFICAS = "¿Con qué cita te identificas más?\n¿Por qué?";
 const NINGUNA = "Ninguna de las dos";
 
 const respuestas = { version: [], sobrantes: [], significa: [], eleccion: "", porque: "" };
@@ -916,12 +916,10 @@ function pasoIdentificas() {
     });
     const bloque = document.createElement("div");
     bloque.className = "campo-cita";
-    const label = document.createElement("label");
-    label.textContent = "¿Por qué?";
-    label.htmlFor = "porque";
-    const t = areaTexto("Escribe aquí tu respuesta…");
+    const t = areaTexto("Escribe aquí por qué…");
     t.id = "porque";
-    bloque.append(label, t);
+    t.setAttribute("aria-label", "¿Por qué?");
+    bloque.append(t);
     cont.append(fila, bloque);
     const revisar = () => habilitar(Boolean(elegida) && Boolean(t.value.trim()));
     t.addEventListener("input", revisar);
