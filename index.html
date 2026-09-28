@@ -260,6 +260,12 @@
     line-height: 1.5;
     font-style: italic;
   }
+  .cita .fuente.revelada { animation: revelar 1.6s ease-out; }
+  @keyframes revelar {
+    0% { opacity: 0; background: #f3dbe6; }
+    30% { opacity: 1; background: #f3dbe6; }
+    100% { opacity: 0.8; background: transparent; }
+  }
   .cita .fuente {
     margin-top: 6px;
     font-size: 0.9rem;
@@ -622,12 +628,12 @@ Muévelo a un bloque para formar las citas.</p>
       <div class="etiqueta">Las citas originales</div>
       <div class="cita" id="original-1">
         <blockquote>«No llores porque ya se terminó, sonríe porque sucedió.»</blockquote>
-        <div class="fuente">— atribuida a Gabriel García Márquez («Gabo»)</div>
+        <div class="fuente" hidden>— atribuida a Gabriel García Márquez («Gabo»)</div>
         <div class="mi-lectura" hidden></div>
       </div>
       <div class="cita" id="original-2">
         <blockquote>«Lo único que me duele de morir es que no sea de amor.»</blockquote>
-        <div class="fuente">— Gabriel García Márquez («Gabo»), <em>El amor en los tiempos del cólera</em></div>
+        <div class="fuente" hidden>— Gabriel García Márquez («Gabo»), <em>El amor en los tiempos del cólera</em></div>
         <div class="mi-lectura" hidden></div>
       </div>
       <div class="mi-lectura" id="mi-eleccion" hidden></div>
@@ -2806,6 +2812,14 @@ async function mostrarPantallaFinal() {
   b.textContent = "¿Por qué? ";
   eleccion.append(b, respuestas.porque);
   eleccion.hidden = false;
+
+  /* El autor se revela al final, después de interpretar y opinar */
+  document.querySelectorAll("#panel-original .fuente").forEach(f => {
+    f.hidden = false;
+    f.classList.add("revelada");
+  });
+  document.getElementById("panel-original").scrollIntoView({ block: "center", behavior: "smooth" });
+  await new Promise(r => setTimeout(r, 1800));
 
   await preguntarEscucharOtraVez();
 }
