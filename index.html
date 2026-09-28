@@ -569,15 +569,18 @@ const NIVELES = {
 };
 const INACTIVIDAD_MS = 2 * 60 * 1000;
 
-/* Ayudas, configurables por la dirección: ?ayudas=no, ?corrector=no, ?voz=no */
+/* Ayudas, configurables por la dirección:
+   corrector activado salvo ?ayudas=no o ?corrector=no;
+   micrófono desactivado salvo ?voz=si (necesita permiso del navegador) */
 const PARAMETROS = new URLSearchParams(location.search);
-const apagado = nombre => ["no", "0", "false", "off"].includes((PARAMETROS.get(nombre) || "").toLowerCase());
+const valor = nombre => (PARAMETROS.get(nombre) || "").toLowerCase();
+const apagado = nombre => ["no", "0", "false", "off"].includes(valor(nombre));
+const encendido = nombre => ["si", "sí", "1", "true", "on"].includes(valor(nombre));
 const CORRECTOR = !apagado("ayudas") && !apagado("corrector");
-const VOZ = !apagado("ayudas") && !apagado("voz");
-if (!CORRECTOR || !VOZ) {
+const VOZ = !apagado("ayudas") && encendido("voz");
+if (!CORRECTOR || VOZ) {
   const modo = document.getElementById("modo");
-  modo.textContent = !CORRECTOR && !VOZ ? "Versión sin ayudas (sin corrector ni micrófono)"
-    : !CORRECTOR ? "Versión sin corrector" : "Versión sin micrófono";
+  modo.textContent = !CORRECTOR ? "Versión sin ayudas (sin corrector)" : "Versión con micrófono";
   modo.hidden = false;
 }
 
@@ -1012,8 +1015,7 @@ function botonMicrofono(t, estado) {
 function textoAyudas() {
   const partes = [];
   if (CORRECTOR) partes.push("Las palabras mal escritas se subrayan en rojo: haz clic derecho sobre ellas (o tócalas) para ver sugerencias. Si no ves nada, activa el español en tu teclado o navegador.");
-  if (VOZ && reconocimientoDisponible()) partes.push("🎤 Pulsa el micrófono y habla en español. El dictado necesita internet y lo procesa Google o Apple.");
-  else if (VOZ) partes.push("🎤 También puedes dictar con el micrófono de tu teclado.");
+  if (VOZ && reconocimientoDisponible()) partes.push("🎤 Pulsa el micrófono y habla en español. El dictado necesita internet, el permiso del navegador y lo procesa Google o Apple.");
   return partes;
 }
 
